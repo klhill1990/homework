@@ -1,0 +1,201 @@
+---
+title: "quant_methods_univariate_assignment"
+author: "lloyd hill"
+date: "February 4, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+install.packages("car")
+install.packages("MASS")
+install.packages("dplyr")
+library(car)
+library(ggplot2)
+library(MASS)
+library(dplyr)
+```
+
+```{r}
+#import trees data
+trees <- read.csv("https://raw.githubusercontent.com/dmcglinn/quant_methods/gh-pages/data/treedata_subset.csv")
+head(trees)
+
+#subset data into two species of interest, frasier fir and red maple
+trees_abi <- subset(trees, trees$spcode == 'ABIEFRA')
+trees_ace <- subset(trees, trees$spcode == 'ACERRUB')
+
+#make pairs plots to explore potential relationships among variables of interest (cover, elev, tci, streamdist, and beers)
+pairs(trees_abi[,c(4:9)])
+pairs(trees_ace[,c(4:9)])
+
+#after viewing these initial pairs plots, I can see some trends between elevation and cover as well as some possible interactions (eg, a positive relationship between elevation and stream distance, and a negative relationship between tci and elevation). 
+```
+
+```{r}
+#I wanted to first build linear models to explore potential relationships between cover (response variable) and any habitat parameters (explanatory variables).
+
+abi_lm1 <- lm(cover ~ elev + tci + streamdist + disturb + beers, data = trees_abi)
+Anova(abi_lm1, type = 3)
+
+ace_lm1 <- lm(cover ~ elev + tci + streamdist + disturb + beers, data = trees_ace)
+Anova(ace_lm1, type = 3)
+
+#I compared the Anova() function from the 'car' package to the R's basic 'summary' outputs. While the p-values are very similar, summary handles the categorical variable (disturb) differently. The summary table also includes R-squared values. 
+
+summary(abi_lm1)
+summary(ace_lm1)
+
+#With these models, elevation is the only significant (p<0.05) variable for fir cover; whereas, elevation, stream distance and beers are all significant explanatory variables for red maple. These models also return an adjusted R-squared value of 0.5 for fir cover, and 0.04 for maple cover. 
+```
+
+```{r}
+#While my first model includes all variables in this dataset, it may not be the best model for describing cover of these two species. There may in fact create a better model to describe the growth habits of both species. Since stream distance, elevation, and topographical convergence index are all indicators of topography, it is likely our data contain interactions. These models include interactions between stream distance, tci, and elevation. (I didn't include beers as a interaction because slope aspect should be independent of elevation). 
+
+abi_lm2 <- lm(cover ~ elev + tci + streamdist + elev:tci + elev:streamdist + beers, data = trees_abi)
+Anova(abi_lm2, type = 3)
+summary(abi_lm2)
+
+ace_lm2 <- lm(cover ~ elev + tci + streamdist + elev:tci + elev:streamdist + beers, data = trees_ace)
+Anova(ace_lm2, type = 3)
+summary(ace_lm2)
+
+#These models produce similar r-squared values as my first set of models, but the p-values have changed. For example, all variables in the fir cover lost their signifcance, and the interaction between elevation and tci showed siginificance for maple cover. 
+```
+For each species address the following additional questions:
+
+1.1. How well does the exploratory model appear to explain cover?
+
+FIR
+The r-squared values (>0.5) from both of my models suggest that these habitat parameters do a pretty good job at explaining cover. 
+
+MAPLE
+The low r-sqaured values (<0.01) from both of my models suggest that these habitat parameters do not explain cover very well. There may be patterns (as explained by low P-values) but they do not make for a good linear regression.
+
+1.2. Which explanatory variables are the most important?
+
+FIR
+In my first model, elevation was the only explanatory variable with a significant p-value. Once I introduced interactions into the second model, elevation lost its significant P-value.
+
+MAPLE
+In my first model, several explanatory variables demonstrated a siginificant p-value: elevation, stream distance, and beers. When I included interactions, these variables maintained significance and the interaction between elevation and tci showed significance. 
+
+1.3. Do model diagnostics indicate any problems with violations of OLS assumptions?
+
+I used the plot function to see how well these data matched the assumptions of our analysis. In both species, the residuals appear to be normally distributed and varaince looks homogenous. The study design also suggests samples were independent. 
+```{r}
+#FIR
+plot(abi_lm1)
+plot(abi_lm2)
+
+#MAPLE
+plot(ace_lm1)
+plot(ace_lm2)
+```
+
+1.4. Are you able to explain variance in one species better than another, why might this be the case?
+
+The different tree species returned very different R-squared values. For fir cover r-squared = 0.5, which means 50% of the variance can be explained by our model. This is pretty good for ecological data. Conversely, maple returned a very low R-squared value of 0.04. Frasier fir is a habitat specialist, only growing on the tallest peaks of the Southern Appalachians; therefore, elevation explains cover very well. Red maple is a habitat generalist, and can tolerate a wide range of elevations and growing conditions accounting for the large amount of unexplained variance in the model.  
+
+2. You may have noticed that the variable cover is defined as positive integers between 1 and 10. and is therefore better treated as a discrete rather than continuous variable. Re-examine your solutions to the question above but from the perspective of a General Linear Model (GLM) with a Poisson error term (rather than a Gaussian one as in OLS). The Poisson distribution generates integers 0 to positive infinity so this may provide a good first approximation. Your new model calls will look as follows:
+
+```{r}
+#Create glm model with poisson distrubution using same parameters as my second lm for each of the species.
+abi_poi <- glm(cover ~ elev + tci + streamdist + elev:tci + elev:streamdist + beers, data = trees_abi, family = 'poisson')
+ace_poi <- glm(cover ~ elev + tci + streamdist + elev:tci + elev:streamdist + beers, data = trees_ace, family = 'poisson')
+
+#write function to calculate pseudo r squared value from deviance/null deviance. 
+pseudo_r2 <- function(my_glm) {
+    (1 - my_glm$deviance/my_glm$null.deviance)
+}
+
+#compare the two methods
+paste("Pseudo R-squared from GLM, Fir")
+pseudo_r2(abi_poi)
+
+paste("Adjusted R-squared from LM, Fir")
+abi_lm2_summ <- summary(abi_lm2)
+abi_lm2_summ$adj.r.squared
+
+paste("Pseudo R-squared from GLM, Maple")
+pseudo_r2(ace_poi)
+
+paste("Adjusted R-squared from LM, Maple")
+ace_lm2_summ <- summary(ace_lm2)
+ace_lm2_summ$adj.r.squared
+```
+2.1. Compare your qualatitive assessment of which variables were most important in each model. Does it appear that changing the error distribution changed the results much? In what ways?
+
+For both fir and maple models, using the pseudo r-squared calculation and poisson distributed glm function increased the r-value. This suggests that this technique was able to explain more variation/error within the models. However, While the fir model maintained a decent r-squared, the maple models still show a weak r-squared. 
+
+3. Provide a plain English summary (i.e., no statistics) of what you have found and what conclusions we can take away from your analysis?
+
+The results of my analyses support my initial hypotheses -- that frasier fir cover will be strongly coorelated with elevation whereas red maple cover will be hard to explain by any one variable. Frasier fir is a habitat specialist restricted to the tallest peaks of the Southern Appalachians. Red maple, is a habitat generalist and tolerates a variety of growing conditions. While red maple cover is influenced by its habitat, it will be harder to detect any linear trend with the given data. 
+
+4. 4. (optional) Examine the behavior of the function stepAIC() using the exploratory models developed above. This is a very simple and not very robust machine learning stepwise algorithm that uses AIC to select a best model. By default it does a backward selection routine.
+
+```{r}
+#create models with all combinations of variables to run with stepAIC()
+abi_lm_all <- lm(cover ~ elev * tci * streamdist * beers * disturb, data = trees_abi)
+ace_lm_all <- lm(cover ~ elev * tci * streamdist * beers * disturb, data = trees_ace)
+
+#run stepAIC() on these models to chose a model with the lowest AIC
+#stepAIC(abi_lm_all)
+#stepAIC(ace_lm_all)
+
+#The lowest AIC produced for the fir data was for the model: 'AIC=46.26 (cover ~ elev + tci + streamdist + beers + elev:tci + elev:streamdist + tci:streamdist + elev:beers + tci:beers + streamdist:beers + elev:tci:beers + tci:streamdist:beers)"
+
+
+#The lowest AIC produced for the maple data was for the model: 'AIC=952.1 (cover ~ elev + tci + streamdist + beers + disturb + elev:tci + elev:streamdist + tci:streamdist + elev:beers + tci:beers + streamdist:beers + elev:disturb + tci:disturb + streamdist:disturb + beers:disturb + elev:tci:streamdist + tci:streamdist:beers + elev:streamdist:disturb + tci:streamdist:disturb + tci:beers:disturb + streamdist:beers:disturb + tci:streamdist:beers:disturb)'
+
+
+#While this technique may have dropped the AIC a few points, it failed to produce a simple model. This shows the limitations of this type of model selection. 
+```
+
+5. (optional) Develop a model for the number of species in each site (i.e., unique plotID). This variable will also be discrete so the Poisson may be a good starting approximation. Side note: the Poisson distribution converges asymptotically on the Gaussian distribution as the mean of the distribution increases. Thus Poisson regression does not differ much from traditional OLS when means are large.
+
+
+```{r}
+#I wasn't sure how to approach this, so I looked online and found the 'dplyr' package. I wanted to model the species per plot as it relates to elevation. My hypothesis is that species per plot decrease with elevation. My plot appears to confirm this, but the resulting r-squared (using glm function from previous question) was only 0.3. It appears that this relationship is not linear, if I had more time I'd explore other regression types. 
+
+elev_spp <-   trees %>%                   
+              group_by(elev) %>% 
+              summarize(number_species = n_distinct(species))   
+
+head(elev_spp)
+
+plot(elev_spp)
+
+elev_spp_glm <- glm(number_species ~ elev, data = elev_spp, family = 'poisson')
+
+pseudo_r2(elev_spp_glm)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
