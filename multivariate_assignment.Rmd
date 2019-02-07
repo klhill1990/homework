@@ -1,0 +1,37 @@
+---
+title: "multivariate_assignment"
+author: "lloyd hill"
+date: "February 7, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(vegan)
+data(dune)
+data(dune.env)
+
+dune
+dune.env
+dune_env_2 <- dune.env[,c(1,2,5)]
+dune_env_2$A1 <- as.numeric(dune_env_2$A1)
+dune_env_2$Moisture <- as.numeric(dune_env_2$Moisture)
+dune_env_2$Manure <- as.numeric(dune_env_2$Manure)
+#combine dataframes into one matrix (and only retaining columns with numbers)
+dune_all <- cbind(dune, dune_env_2)
+dune_all
+
+dune_mds <- metaMDS(dune_all)
+plot(dune_mds, type='n')
+text(dune_mds, 'sp', cex=.5)
+# generate vector of colors 
+color_vect = rev(terrain.colors(6))[-1]
+points(dune_mds, 'sites', pch=19, 
+      col=color_vect[dune.env$Moisture])
+legend('topright', paste("Moisture =", 1:5, sep=''), 
+      col=color_vect, pch=19)
+```
